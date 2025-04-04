@@ -4,7 +4,7 @@ from discord import FFmpegPCMAudio
 import yt_dlp as youtube_dl
 import os
 import queue
-import psutil
+'''import psutil'''
 from dotenv import load_dotenv
 from discord import Intents, Client, Message
 from responses import get_response
@@ -21,10 +21,11 @@ intents.message_content = True
 intents.voice_states = True
 client: Client = Client(intents=intents)
 
-ffmpeg_dict = {}
+'''ffmpeg_dict = {}'''
 song_queues = queue.Queue()
 path_queues = queue.Queue()
 
+#allow private message accessed by ?(context)
 async def action(message: Message, user_message: str) -> None:
     if not user_message:
         print("(Message was empty because intents were not enabled probably)")
@@ -39,11 +40,13 @@ async def action(message: Message, user_message: str) -> None:
     except Exception as e:
         print(e)
 
+#attempt to clear both queues and dict
 async def clear():
+    '''ffmpeg_dict.clear()'''
     while not song_queues.empty(): song_queues.get_nowait()
     while not path_queues.empty(): 
         temp = path_queues.get_nowait()
-        if os.path.exists(temp):
+        '''if os.path.exists(temp):
             try:
                 # Terminate the specific ffmpeg process for the song
                 pc = ffmpeg_dict.get(temp)
@@ -58,9 +61,10 @@ async def clear():
                 os.remove(temp)
                 print(f"Deleted file: {temp}")
             except Exception as e:
-                print(f"Error deleting file: {e}")
+                print(f"Error deleting file: {e}")'''
 
-
+#function for the bot to join a voice channel
+#checks if commander is in a voice channel, if bot is in a voice channel
 async def join(message: Message):
     if not message.author.voice or not message.author.voice.channel:
         await message.channel.send("YOU NEED TO JOIN A VOICE CHANNEL FIRST")
@@ -72,8 +76,8 @@ async def join(message: Message):
     if voice_client:
         if voice_client.channel == user_channel:
             await message.channel.send('?')
-            await message.channel.send(f"I'm already in **{user_channel.name}**")
-            await message.channel.send('dumbass')
+            await message.channel.send(f"im already in **{user_channel.name}**")
+            await message.channel.send('dummy')
         else:
             await voice_client.move_to(user_channel)
             await message.channel.send(f"im gonna follow u to **{user_channel.name}**")
@@ -81,6 +85,8 @@ async def join(message: Message):
         await user_channel.connect()
         await message.channel.send(f"welcome your goat zlBot to **{user_channel.name}**!")
 
+#function to disconnect the bot from a voice channel
+#checks if the bot is in a voice channel or not
 async def leave(message: Message):
 
     voice_client = discord.utils.get(client.voice_clients, guild=message.guild)
@@ -93,7 +99,8 @@ async def leave(message: Message):
 
     await clear()
     
-
+#function after command "play" is ran
+#downloads audio file
 async def play(message: Message, url: str):
     """ Plays audio from a YouTube URL """
 
@@ -120,9 +127,9 @@ async def play(message: Message, url: str):
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
             file_path = filename.replace("webm", "opus")
+            file_path = filename.replace("mp4", "opus")
             title = info.get('title', 'Unknown Title')
 
-        # Check if the file exists after download
         if not os.path.exists(file_path):
             await message.channel.send("Failed to download the audio.")
             return
@@ -131,14 +138,22 @@ async def play(message: Message, url: str):
             song_queues.put(file_path)
             path_queues.put(file_path)
             await message.channel.send(f"ill sing **{title}** after")
+            '''for proc in psutil.process_iter(attrs=['pid', 'name']):
+                if 'ffmpeg' in proc.info['name'].lower():
+                    ffmpeg_dict[file_path] = proc'''
         else:
             path_queues.put(file_path)
             await play_song(voice_client, file_path)
+            '''for proc in psutil.process_iter(attrs=['pid', 'name']):
+                if 'ffmpeg' in proc.info['name'].lower():
+                    ffmpeg_dict[file_path] = proc'''
         
     except Exception as e:
         await message.channel.send(f"Error downloading or playing the audio for: **{e}**")
         print(f"Error: {e}")
 
+#function comes after play()
+#plays the audio file and runs itself to queue next audio
 async def play_song(voice_client, file_path):
 
     def after_playing(e):
@@ -146,9 +161,6 @@ async def play_song(voice_client, file_path):
         if not song_queues.empty():
             next_song = song_queues.get_nowait()
             voice_client.play(FFmpegPCMAudio(next_song, executable=FFMPEG_PATH), after=lambda e: after_playing(e))
-            for proc in psutil.process_iter(attrs=['pid', 'name']):
-                if 'ffmpeg' in proc.info['name'].lower():
-                    ffmpeg_dict[file_path] = proc
             print(f"now im gonna sing: **{next_song}** now")
         else:
             print("im done singing")
@@ -158,7 +170,7 @@ async def play_song(voice_client, file_path):
         if os.path.exists(last_song):
             try:
                 # Terminate the specific ffmpeg process for the song
-                temp = ffmpeg_dict.get(last_song)
+                '''temp = ffmpeg_dict.get(last_song)
                 if temp:
                     try:
                         temp.terminate()
@@ -166,7 +178,7 @@ async def play_song(voice_client, file_path):
                     except Exception as err:
                         print(f"Error terminating ffmpeg process for {last_song}: {err}")
                     finally:
-                        ffmpeg_dict.pop(last_song)
+                        ffmpeg_dict.pop(last_song)'''
 
                 os.remove(last_song)
                 print(f"Deleted file: {last_song}")
@@ -175,10 +187,7 @@ async def play_song(voice_client, file_path):
 
     voice_client.play(FFmpegPCMAudio(file_path, executable=FFMPEG_PATH), after=lambda e: after_playing(e))
 
-    for proc in psutil.process_iter(attrs=['pid', 'name']):
-        if 'ffmpeg' in proc.info['name'].lower():
-            ffmpeg_dict[file_path] = proc
-
+#function to skip audio file to the next in queue
 async def skip(message: Message):
     voice_client = discord.utils.get(client.voice_clients, guild=message.guild)
     if not voice_client or not voice_client.is_playing():
